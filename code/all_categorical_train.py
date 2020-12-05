@@ -4,20 +4,20 @@ import tensorflow as tf
 import numpy as np
 from scipy.spatial.distance import cdist
 from tensorflow.python.keras.models import Sequential
-from tensorflow.python.keras.layers import Dense, GRU, Embedding, LSTM
+from tensorflow.python.keras.layers import Dense, GRU, Embedding, Flatten
 from tensorflow.python.keras.optimizers import Adam
+#from tensorflow.python.keras.utils import to_categorical
 from tensorflow.python.keras.preprocessing.text import Tokenizer
 from tensorflow.python.keras.preprocessing.sequence import pad_sequences
 from tensorflow.python.keras import backend as K
 
-
 PATH_TO_DATA = '../data/processed/'
-PATH_TO_TRAINING_DATA = PATH_TO_DATA + 'tense_train_binary.csv'
-PATH_TO_TEST_DATA = PATH_TO_DATA + 'tense_test_binary.csv'
+PATH_TO_TRAINING_DATA = PATH_TO_DATA + 'all_train_categorical.csv'
+PATH_TO_TEST_DATA = PATH_TO_DATA + 'all_test_categorical.csv'
+NUM_ERRORS = 4
 NUM_WORDS = 10000
 
-
-tf.compat.v1.disable_eager_execution() 
+tf.compat.v1.disable_eager_execution()
 
 
 def load_data_from_file(file_name):
@@ -30,7 +30,8 @@ def load_data_from_file(file_name):
             text.append(row[0])
             labels.append(float(row[3]))
 
-    return text, labels
+    one_hot_labels = tf.keras.utils.to_categorical(labels, num_classes=NUM_ERRORS)
+    return text, one_hot_labels
 
 
 def tokenize_text(train_set, test_set):
@@ -59,32 +60,18 @@ def prepare_data():
 
 def build_model(max_tokens):
     model = Sequential()
-    optimizer = Adam(lr=1e-3)
     embedding_size = 8
+    optimizer = Adam(lr=1e-3)
 
     model.add(Embedding(input_dim=NUM_WORDS, output_dim=embedding_size, input_length=max_tokens, name='layer_embedding'))
     model.add(GRU(units=16, return_sequences=True))
     model.add(GRU(units=8, return_sequences=True))
     model.add(GRU(units=4))
-    model.add(Dense(1, activation='sigmoid'))
+    model.add(Dense(NUM_ERRORS, activation='softmax')) # changed ativation to softmax and first parameter from one to 2 vhl
 
-    model.compile(loss='binary_crossentropy', optimizer=optimizer, metrics=['accuracy'])
+    model.compile(loss='categorical_crossentropy', optimizer=optimizer, metrics=['accuracy']) # changed loss to categorical_crossentropy
 
     return model
-
-
-def print_results(model, text, labels):
-    y_pred = model.predict(x=text[0:1000]).T[0]
-    y_pred = y_pred.T[0]
-
-    cls_pred = np.array([1.0 if p > 0.5 else 0.0 for p in y_pred])
-    cls_true = np.array(labels[0:1000])
-
-    incorrect = np.where(cls_pred != cls_true)
-    incorrect = incorrect[0]
-
-    for i in incorrect:
-        print (text[i]) 
 
 
 def main():
@@ -93,8 +80,9 @@ def main():
 
     print("training model")
 
-    model.fit(x_train, y_train, validation_split=0.05, epochs=3, batch_size=32, shuffle = True,steps_per_epoch=None)
-    result = model.evaluate(x_test, np.array(y_test))
+    model.fit(x_train, y_train, validation_split=0.05, epochs=3, batch_size=32) # replaced y_train with one_hot_labels 
+    result = model.evaluate(x_test, np.array(y_test)) # replaced y_test with two_hot_abels
+
     print("Accuracy: {0:.2%}".format(result[1]))
 
 
